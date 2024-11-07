@@ -2,15 +2,19 @@ from typing import List, Optional
 import reflex as rx
 import asyncio
 import time
+from enum import Enum
 
 # ----------------------------------------------------- Backend Area --------------------------------------------------
+class Solution:
+    FAKE = "Fake"
+    ConstraintPropagation = "Constratint Propatation"
         
 class SudokuState(rx.State):
     # 9x9 sudoku board class variable that all instances share
     board: List[List[int]] = [[0 for _ in range(9)] for _ in range(9)]
     selected_cell: tuple = (0, 0)
     original_board: List[List[int]] = [[0 for _ in range(9)] for _ in range(9)]
-    strategy: str = "fake"
+    strategy : str = Solution.FAKE
     delay: float = 1
 
     def init_board(cls):
@@ -63,23 +67,71 @@ class SudokuState(rx.State):
     def common_update(cls):
         pass
 
-    def solve(cls):
-        if cls.strategy == "fake":
-            cls.fake_solution()
-    
     def set_strategy(cls, strategy):
         cls.strategy = strategy
 
-    @rx.background
-    async def fake_solution(cls):
+class FakeSudokuSolver(SudokuState):
+    def solve(self):
         for i in range(9):
             for j in range(9):
-                yield SudokuState.insert_cell(i, j, 2)
-                await asyncio.sleep(0.1)
+                self.insert_cell(i, j, 1)
 
+class ConstraintPropagationSudokuSolver(SudokuState):
+    def find_candidates(self, row: int, col: int) -> set[int]:
+        candidates = set(range(1, 10))
+        # possible numbers that can be placed in the empty cell.
+        candidates -= set(self.board[row])  # Remove numbers already present in the same row
+        candidates -= {self.board[i][col] for i in range(9)}  # Remove numbers already present in the same column
+        box_row, box_col = 3 * (row // 3), 3 * (col // 3)
+        for i in range(box_row, box_row + 3):  # Remove numbers already present in the 3x3 subgrid containing the cell
+            for j in range(box_col, box_col + 3):
+                candidates.discard(self.board[i][j])
+        return candidates
 
-    # 아래에 알고리즘을 추가
-    # 알고리즘에서 보드를 조작할 때 insert_cell, delete_cell 함수를 무조건 사용하여야 함
+    def backtracking(self):
+        def backtrack(row: int, col: int) -> bool:
+            # If we reach the end of the board, return True
+            if row == 9:
+                return True
+            
+            # If this cell is already filled, move to the next cell  
+            if self.board[row][col] != 0:
+                return backtrack(row + (col + 1) // 9, (col + 1) % 9)
+            
+            # Get the possible candidates for this cell
+            candidates = self.find_candidates(row, col)
+            
+            for num in candidates:
+                if self.is_valid_move(row, col, num):
+                    self.insert_cell(row, col, num)
+                    
+                    # Recursively attempt to solve from the next cell
+                    if backtrack(row + (col + 1) // 9, (col + 1) % 9):
+                        return True
+                    
+                    # If no solution is found, backtrack and try next candidate
+                    self.delete_cell(row, col)
+            
+            return False  # No valid solution found for this cell
+    
+    # Start backtracking from the top-left corner (0,0)
+        return backtrack(0, 0)
+
+    def solve(self):
+        updated = False  # a flag to track if any updates
+        for row in range(9):
+            for col in range(9):
+                if self.board[row][col] == 0:
+                    candidates = self.find_candidates(row, col) 
+                    if len(candidates) == 1:
+                        # If there is exactly one candidate, fill the cell
+                        num = candidates.pop()
+                        self.insert_cell(row, col, num)
+                        updated = True
+        if updated:
+            self.solve()  # Continue until no more updates  
+        else:
+            self.backtracking()
 
 # ----------------------------------------------------- Frontend Area --------------------------------------------------
 def display_row(row):
@@ -95,13 +147,29 @@ def display_row(row):
         ),
     )
 
+def button():
+    return rx.button(
 
+    )
 def index():
     return rx.container(
         rx.flex(
             rx.hstack(
                 rx.button("생성", on_click = SudokuState.init_board),
-                rx.button("실행", on_click = SudokuState.fake_solution) 
+                rx.select(
+                    [Solution.FAKE, Solution.ConstraintPropagation],
+                    value = SudokuState.strategy,
+                    on_change = SudokuState.set_strategy
+                ),
+                rx.cond(
+                    (SudokuState.strategy == Solution.FAKE), # 조건
+                    rx.button("실행", on_click = FakeSudokuSolver.solve), # 참 
+                    rx.cond( # 거짓
+                        (SudokuState.strategy == Solution.ConstraintPropagation), # 조건
+                        rx.button("실행", on_click = ConstraintPropagationSudokuSolver.solve), # 참
+                        rx.button("실행") # 거짓
+                    )
+                )
             ),
             rx.vstack(
                 rx.foreach(SudokuState.board, display_row),
@@ -119,3 +187,5 @@ def index():
 # ----------------------------------------------------- Page Area --------------------------------------------------
 app = rx.App()
 app.add_page(index)
+
+

@@ -90,12 +90,6 @@ class BoardHistory:
     def append(self, board: Board):
         self.board_history.append(board)
 
-class Solution:
-    FAKE = "Fake"
-    ConstraintPropagation = "Constratint Propatation"
-    BackTracking = "Back Tracking"
-    Bitmask = "Bitmask"
-
 class Simulator:
     def __init__(self, base_puzzle):
         base_puzzle = base_puzzle
@@ -300,6 +294,53 @@ class BitmaskSudokuSolver:
 
         backtrack()
 
+class Solution:
+    ConstraintPropagation = "Constratint Propatation"
+    BackTracking = "Back Tracking"
+    Bitmask = "Bitmask"
+
+class Level:
+    EASY = "Easy"
+    MEDIUM = "Medium"
+    HARD = "Hard"
+
+class TestCase:
+    easy_puzzle = [
+        [5, 3, 4, 6, 7, 8, 9, 0, 2],
+        [6, 7, 2, 1, 9, 5, 3, 4, 8],
+        [1, 9, 8, 3, 4, 2, 5, 6, 7],
+        [8, 5, 9, 7, 6, 1, 4, 2, 3],
+        [4, 2, 6, 8, 5, 3, 7, 9, 1],
+        [7, 1, 3, 9, 2, 4, 8, 5, 6],
+        [9, 6, 1, 5, 3, 7, 2, 8, 4],
+        [2, 8, 7, 4, 1, 9, 6, 3, 5],
+        [3, 4, 5, 2, 8, 6, 1, 7, 0]
+    ]
+
+    medium_puzzle = [
+        [5, 3, 0, 0, 7, 0, 0, 0, 0],
+        [6, 0, 0, 1, 9, 5, 0, 0, 0],
+        [0, 9, 8, 0, 0, 0, 0, 6, 0],
+        [8, 0, 0, 0, 6, 0, 0, 0, 3],
+        [4, 0, 0, 8, 0, 3, 0, 0, 1],
+        [7, 0, 0, 0, 2, 0, 0, 0, 6],
+        [0, 6, 0, 0, 0, 0, 2, 8, 0],
+        [0, 0, 0, 4, 1, 9, 0, 0, 5],
+        [0, 0, 0, 0, 8, 0, 0, 7, 9],
+    ]
+    
+    hard_puzzle = [
+        [8, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 3, 6, 0, 0, 0, 0, 0],
+        [0, 7, 0, 0, 9, 0, 2, 0, 0],
+        [0, 5, 0, 0, 0, 7, 0, 0, 0],
+        [0, 0, 0, 0, 4, 5, 7, 0, 0],
+        [0, 0, 0, 1, 0, 0, 0, 3, 0],
+        [0, 0, 1, 0, 0, 0, 0, 6, 8],
+        [0, 0, 8, 5, 0, 0, 0, 1, 0],
+        [0, 9, 0, 0, 0, 0, 4, 0, 0]
+    ]
+    
 class State(rx.State):
     board: List[List[int]] = [[0 for _ in range(9)] for _ in range(9)]
     selected_cell: tuple = (0, 0)
@@ -309,68 +350,72 @@ class State(rx.State):
     start_time: float = 0.0
     end_time: float = 0.0
 
-    strategy: str = Solution.FAKE
+    strategy: str = Solution.BackTracking
+    level: str = Level.EASY
+
+    is_solved: bool = False
+    is_running: bool = False
+    is_fast_mode: bool = False
 
     def init_board(self):
-        base_puzzle = [
-            [5, 3, 0, 0, 7, 0, 0, 0, 0],
-            [6, 0, 0, 1, 9, 5, 0, 0, 0],
-            [0, 9, 8, 0, 0, 0, 0, 6, 0],
-            [8, 0, 0, 0, 6, 0, 0, 0, 3],
-            [4, 0, 0, 8, 0, 3, 0, 0, 1],
-            [7, 0, 0, 0, 2, 0, 0, 0, 6],
-            [0, 6, 0, 0, 0, 0, 2, 8, 0],
-            [0, 0, 0, 4, 1, 9, 0, 0, 5],
-            [0, 0, 0, 0, 8, 0, 0, 7, 9],
-        ]
-        self.board = [row[:] for row in base_puzzle]
+        base_puzzle = None
+        if self.level == Level.EASY:
+            base_puzzle = [row[:] for row in TestCase.easy_puzzle]
+        elif self.level == Level.MEDIUM:
+            base_puzzle = [row[:] for row in TestCase.medium_puzzle]
+        elif self.level == Level.HARD:
+            base_puzzle = [row[:] for row in TestCase.hard_puzzle]
+
+        self.board = base_puzzle
         self.original_board = [row[:] for row in base_puzzle]
         self.count = 0
         self.start_time = 0
         self.end_time = 0
+        self.is_solved = 0
 
-    async def solve(self):
-        base_puzzle = [
-            [5, 3, 0, 0, 7, 0, 0, 0, 0],
-            [6, 0, 0, 1, 9, 5, 0, 0, 0],
-            [0, 9, 8, 0, 0, 0, 0, 6, 0],
-            [8, 0, 0, 0, 6, 0, 0, 0, 3],
-            [4, 0, 0, 8, 0, 3, 0, 0, 1],
-            [7, 0, 0, 0, 2, 0, 0, 0, 6],
-            [0, 6, 0, 0, 0, 0, 2, 8, 0],
-            [0, 0, 0, 4, 1, 9, 0, 0, 5],
-            [0, 0, 0, 0, 8, 0, 0, 7, 9],
-        ]
+    def solve(self):
+        self.is_running = True
+
+        base_puzzle = None
+        if self.level == Level.EASY:
+            base_puzzle = [row[:] for row in TestCase.easy_puzzle]
+        elif self.level == Level.MEDIUM:
+            base_puzzle = [row[:] for row in TestCase.medium_puzzle]
+        elif self.level == Level.HARD:
+            base_puzzle = [row[:] for row in TestCase.hard_puzzle]
+
         solver = None
-        if self.strategy == Solution.FAKE:
-            solver = FakeSolver(base_puzzle)
-        elif self.strategy == Solution.ConstraintPropagation:
+        if self.strategy == Solution.ConstraintPropagation:
             solver = ConstraintPropagationSolver(base_puzzle)
         elif self.strategy == Solution.BackTracking:
             solver = BackTrackingSolver(base_puzzle)
         elif self.strategy == Solution.Bitmask:
             solver = BitmaskSudokuSolver(base_puzzle)
-        
+
+        self.is_solved = False
+        self.start_time = time.time()
         solver.solve()
+        self.end_time = time.time()
+        self.is_solved = True
+
         board_history = solver.get_history()
 
         for board in board_history:
             self.board = board.board
             self.selected_cell = board.selected_cell
             self.count = board.count
-            self.start_time = board.start_time
-            self.end_time = board.end_time
+            # self.start_time = board.start_time
+            # self.end_time = board.end_time
             # await asyncio.sleep(0.1)
-            yield
-    
+            if not self.is_fast_mode : yield
+
+        self.is_running = False
+
     def prev(self):
         pass
 
     def next(self):
         pass
-
-    
-            
 
 # ----------------------------------------------------- Frontend Area --------------------------------------------------
 def box(item):
@@ -383,105 +428,132 @@ def box(item):
         align_items="center",
         justify_content="center",
         font_size="1.2em",
-        font_weight="medium",
+        font_weight="bold",
         bg="white",
         color="#2D3748",
         _hover={"bg": "#EDF2F7"},
     )
-
+    
 def row(item):
     return rx.hstack(
         rx.foreach(item, box),
         spacing="0"
     )
 
-def control_panel():
+def upper_control_panel():
     return rx.hstack(
         rx.box(
-            rx.vstack(
-                rx.text("시도 횟수", color="gray.600", font_size="sm"),
-                rx.text(f"{State.count}회", font_size="lg", font_weight="bold"),
-                spacing="1",
-            ),
-            bg="white",
-            p="4",
-            border_radius="lg",
-            border="1px solid #E2E8F0",
-        ),
-        rx.box(
-            rx.vstack(
-                rx.text("소요 시간", color="gray.600", font_size="sm"),
+            rx.hstack(
+                rx.text("Processing time:", color="gray.600", font_size="sm"),
                 rx.text(
-                    f"{round((State.end_time - State.start_time)*10000) / 10000}초", 
+                    f"{round((State.end_time - State.start_time)*10000) / 10000} sec", 
                     font_size="lg", 
                     font_weight="bold"
                 ),
                 spacing="1",
             ),
-            bg="white",
-            p="4",
-            border_radius="lg",
-            border="1px solid #E2E8F0",
         ),
-        rx.button(
-            "생성",
-            on_click=State.init_board,
-            bg="blue.500",
-            color="white",
-            px="6",
-            py="2",
-            border_radius="md",
-            _hover={"bg": "blue.600"},
+        rx.box(
+            rx.hstack(
+                rx.text("Insert/Delete Count:", color="gray.600", font_size="sm"),
+                rx.text(f"{State.count}", font_size="lg", font_weight="bold"),
+                spacing="1",
+            ),
         ),
-        rx.select(
-            [Solution.FAKE, Solution.BackTracking, Solution.ConstraintPropagation, Solution.Bitmask],
-            value=State.strategy,
-            on_change=State.set_strategy,
-            width="200px",
-            border_radius="md",
-            border="1px solid #E2E8F0",
+        rx.cond(State.is_solved, rx.text("Solved", margin_left='auto', weight="bold", color="green"), 
+        rx.text("Not Solved", margin_left='auto', weight="bold", color="red")),
+        width="100%",
+        justify="start",
+        spacing="4",  # 요소 간 간격 추가
+    )
+
+def below_control_panel():
+    return rx.hstack(
+        rx.vstack(
+            rx.select(
+                [Level.EASY, Level.MEDIUM, Level.HARD],
+                value=State.level,
+                on_change=State.set_level,
+                width="200px",
+                border_radius="md",
+                border="1px solid #E2E8F0",
+            ),
+            rx.select(
+                [Solution.BackTracking, Solution.Bitmask, Solution.ConstraintPropagation],
+                value=State.strategy,
+                on_change=State.set_strategy,
+                width="200px",
+                border_radius="md",
+                border="1px solid #E2E8F0",
+            ),
+            
         ),
-        rx.button(
-            "실행",
-            on_click=State.solve,
-            bg="green.500",
-            color="white",
-            px="6",
-            py="2",
-            border_radius="md",
-            _hover={"bg": "green.600"},
+        rx.vstack(
+            rx.button(
+                "Create Board",
+                on_click=State.init_board,
+                bg="blue.500",
+                color="white",
+                px="6",
+                py="2",
+                border_radius="md",
+                _hover={"bg": "blue.600"},
+                disabled=State.is_running,  # 상태값에 따라 비활성화
+            ),
+            rx.button(
+                "Run",
+                on_click=State.solve,
+                bg="green.500",
+                color="white",
+                px="6",
+                py="2",
+                border_radius="md",
+                _hover={"bg": "green.600"},
+                disabled=State.is_running,  # 상태값에 따라 비활성화
+            ),
+            width="fit-content",
+            spacing="4",
         ),
-        spacing="6",
-        p="4",
-        bg="#F7FAFC",
-        border_radius="xl",
-        border="1px solid #E2E8F0",
+        width="100%",
+        justify="end",
+        spacing="4",
     )
 
 def index():
-    return rx.container(
-        rx.vstack(
-            rx.heading("스도쿠 솔버", size="xl", mb="6"),
-            control_panel(),
-            rx.box(
-                rx.vstack(
-                    rx.foreach(State.board, row),
-                    align_items="center",
-                    spacing="0",
+    return rx.center(
+        rx.box(  # container를 box로 변경
+            rx.vstack(
+                rx.heading(
+                    "Sudoku Simulator", 
+                    size="xl", 
+                    mb="4",
+                    align_self="start",
+                    color="gray.800",
                 ),
-                border="2px solid #2D3748",
-                border_radius="lg",
-                p="2",
-                bg="#F7FAFC",
-                shadow="lg",
-                mt="6",
+                upper_control_panel(),
+                rx.box(
+                    rx.vstack(
+                        rx.foreach(State.board, row),
+                        align_items="center",
+                        spacing="0",
+                    ),
+                    border="2px solid #2D3748",
+                    border_radius="lg",
+                    p="4",
+                    bg="white",
+                    shadow="lg",
+                    my="6",  # 상하 마진 추가
+                ),
+                below_control_panel(),
+                width="fit-content",  # 내용물 크기에 맞춤
+                spacing="4",
+                p="6",  # 내부 패딩
             ),
-            max_width="800px",
-            width="100%",
-            spacing="4",
-            py="8",
+            width="fit-content",  # 내용물 크기에 맞춤
+            mx="auto",  # 가운데 정렬
         ),
-        center_content=True,
+        width="100%",
+        min_height="100vh",
     )
 
 # ----------------------------------------------------- Page Area --------------------------------------------------

@@ -306,18 +306,6 @@ class Level:
 
 class TestCase:
     easy_puzzle = [
-        [5, 3, 4, 6, 7, 8, 9, 0, 2],
-        [6, 7, 2, 1, 9, 5, 3, 4, 8],
-        [1, 9, 8, 3, 4, 2, 5, 6, 7],
-        [8, 5, 9, 7, 6, 1, 4, 2, 3],
-        [4, 2, 6, 8, 5, 3, 7, 9, 1],
-        [7, 1, 3, 9, 2, 4, 8, 5, 6],
-        [9, 6, 1, 5, 3, 7, 2, 8, 4],
-        [2, 8, 7, 4, 1, 9, 6, 3, 5],
-        [3, 4, 5, 2, 8, 6, 1, 7, 0]
-    ]
-
-    medium_puzzle = [
         [5, 3, 0, 0, 7, 0, 0, 0, 0],
         [6, 0, 0, 1, 9, 5, 0, 0, 0],
         [0, 9, 8, 0, 0, 0, 0, 6, 0],
@@ -356,31 +344,28 @@ class State(rx.State):
     is_solved: bool = False
     is_running: bool = False
     is_fast_mode: bool = False
+    delay: float = 0.0
 
     def init_board(self):
         base_puzzle = None
         if self.level == Level.EASY:
             base_puzzle = [row[:] for row in TestCase.easy_puzzle]
-        elif self.level == Level.MEDIUM:
-            base_puzzle = [row[:] for row in TestCase.medium_puzzle]
         elif self.level == Level.HARD:
             base_puzzle = [row[:] for row in TestCase.hard_puzzle]
 
-        self.board = base_puzzle
+        self.board = [row[:] for row in base_puzzle]
         self.original_board = [row[:] for row in base_puzzle]
         self.count = 0
         self.start_time = 0
         self.end_time = 0
         self.is_solved = 0
 
-    def solve(self):
+    async def solve(self):
         self.is_running = True
 
         base_puzzle = None
         if self.level == Level.EASY:
             base_puzzle = [row[:] for row in TestCase.easy_puzzle]
-        elif self.level == Level.MEDIUM:
-            base_puzzle = [row[:] for row in TestCase.medium_puzzle]
         elif self.level == Level.HARD:
             base_puzzle = [row[:] for row in TestCase.hard_puzzle]
 
@@ -406,37 +391,38 @@ class State(rx.State):
             self.count = board.count
             # self.start_time = board.start_time
             # self.end_time = board.end_time
-            # await asyncio.sleep(0.1)
-            if not self.is_fast_mode : yield
-
+            if not self.is_fast_mode : 
+                await asyncio.sleep(self.delay)
+                yield
         self.is_running = False
 
-    def prev(self):
-        pass
-
-    def next(self):
-        pass
-
 # ----------------------------------------------------- Frontend Area --------------------------------------------------
-def box(item):
-    return rx.box(
-        item,
-        border="1px solid #CBD5E0",
-        width="3em",
-        height="3em",
-        display="flex",
-        align_items="center",
-        justify_content="center",
-        font_size="1.2em",
-        font_weight="bold",
-        bg="white",
-        color="#2D3748",
-        _hover={"bg": "#EDF2F7"},
-    )
-    
-def row(item):
+def box(item, row, col):
+  return rx.box(
+      item,
+      border="1px solid #CBD5E0",
+      width="3em",
+      height="3em",
+      display="flex",
+      align_items="center",
+      justify_content="center",
+      font_size="1.2em",
+      font_weight="bold",
+      bg=rx.cond(
+          row == State.selected_cell[0],
+          rx.cond(col == State.selected_cell[1], 
+              rx.cond(State.is_running, "#dfdff7", rx.cond((row // 3 + col // 3) % 2 == 1, "#f5f9fc", "white")),  # 선택된 셀 배경색
+              rx.cond((row // 3 + col // 3) % 2 == 1, "#f5f9fc", "white")
+          ),
+          rx.cond((row // 3 + col // 3) % 2 == 1, "#f5f9fc", "white")
+      ),
+      color="#2D3748",  # 글자색은 항상 동일
+      _hover={"bg": "#EDF2F7"},
+  )
+
+def row(item, i):
     return rx.hstack(
-        rx.foreach(item, box),
+        rx.foreach(item, lambda item, j: box(item, i, j)),
         spacing="0"
     )
 
@@ -460,8 +446,10 @@ def upper_control_panel():
                 spacing="1",
             ),
         ),
-        rx.cond(State.is_solved, rx.text("Solved", margin_left='auto', weight="bold", color="green"), 
-        rx.text("Not Solved", margin_left='auto', weight="bold", color="red")),
+        rx.cond(State.is_solved, 
+            rx.text("Solved", margin_left='auto', weight="bold", color="green"), 
+            rx.text("Not Solved", margin_left='auto', weight="bold", color="red"),
+        ),
         width="100%",
         justify="start",
         spacing="4",  # 요소 간 간격 추가
@@ -470,53 +458,77 @@ def upper_control_panel():
 def below_control_panel():
     return rx.hstack(
         rx.vstack(
-            rx.select(
-                [Level.EASY, Level.MEDIUM, Level.HARD],
-                value=State.level,
-                on_change=State.set_level,
-                width="200px",
-                border_radius="md",
-                border="1px solid #E2E8F0",
+            rx.hstack(
+                rx.input(
+                    placeholder="Delay",
+                    on_blur=State.set_delay,
+                    width="100px"
+                ),
+                rx.badge(f"x{State.delay}"),
+                width="fit-content",
             ),
-            rx.select(
-                [Solution.BackTracking, Solution.Bitmask, Solution.ConstraintPropagation],
-                value=State.strategy,
-                on_change=State.set_strategy,
-                width="200px",
-                border_radius="md",
-                border="1px solid #E2E8F0",
+            rx.center(
+                rx.badge("Instant Complete"),
+                rx.switch(on_change=State.set_is_fast_mode),
+                spacing="2"
             ),
-            
+            spacing="4",
+            width="fit-content",
+            align="start",
         ),
-        rx.vstack(
-            rx.button(
-                "Create Board",
-                on_click=State.init_board,
-                bg="blue.500",
-                color="white",
-                px="6",
-                py="2",
-                border_radius="md",
-                _hover={"bg": "blue.600"},
-                disabled=State.is_running,  # 상태값에 따라 비활성화
+        rx.hstack(
+            rx.vstack(
+                rx.select(
+                    [Level.EASY, Level.HARD],
+                    value=State.level,
+                    on_change=State.set_level,
+                    width="150px",
+                    border_radius="md",
+                    border="1px solid #E2E8F0",
+                ),
+                rx.select(
+                    [Solution.BackTracking, Solution.Bitmask, Solution.ConstraintPropagation],
+                    value=State.strategy,
+                    on_change=State.set_strategy,
+                    width="150px",
+                    border_radius="md",
+                    border="1px solid #E2E8F0",
+                ),
+                
             ),
-            rx.button(
-                "Run",
-                on_click=State.solve,
-                bg="green.500",
-                color="white",
-                px="6",
-                py="2",
-                border_radius="md",
-                _hover={"bg": "green.600"},
-                disabled=State.is_running,  # 상태값에 따라 비활성화
+            rx.vstack(
+                rx.button(
+                    "Create Board",
+                    on_click=State.init_board,
+                    bg="blue.500",
+                    color="white",
+                    px="6",
+                    py="2",
+                    
+                    border_radius="md",
+                    _hover={"bg": "blue.600"},
+                    disabled=State.is_running,  # 상태값에 따라 비활성화
+                ),
+                rx.button(
+                    "Run",
+                    on_click=State.solve,
+                    bg="green.500",
+                    color="white",
+                    px="6",
+                    py="2",
+                    border_radius="md",
+                    _hover={"bg": "green.600"},
+                    disabled=State.is_running,  # 상태값에 따라 비활성화
+                ),
+                width="fit-content",
+                spacing="3",
             ),
             width="fit-content",
             spacing="4",
         ),
         width="100%",
-        justify="end",
-        spacing="4",
+        justify="between"
+        
     )
 
 def index():
@@ -533,7 +545,7 @@ def index():
                 upper_control_panel(),
                 rx.box(
                     rx.vstack(
-                        rx.foreach(State.board, row),
+                        rx.foreach(State.board, lambda item, i: row(item, i)),
                         align_items="center",
                         spacing="0",
                     ),
